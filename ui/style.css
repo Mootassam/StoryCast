@@ -113,3 +113,56 @@ img.avatar { object-fit: cover; background: var(--card2); }
 .tot.acc b { font-size: 15px; }
 .story .th { width: 72px; height: 120px; filter: blur(2px); transition: filter .25s; }
 .story .th.sharp { filter: none; }
+
+/* ===== story viewer popup ===== */
+#vModal { backdrop-filter: blur(10px); background: rgba(3,6,15,.82); }
+.sv { position: relative; display: grid; grid-template-columns: auto 1fr; width: min(1040px, 96vw); height: min(760px, 92vh);
+  background: var(--card); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.6); animation: svIn .22s ease-out; }
+@keyframes svIn { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+.sv-close { position: absolute; top: 14px; right: 14px; z-index: 3; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(255,255,255,.08); color: #fff; font-size: 16px; }
+.sv-close:hover { background: rgba(255,255,255,.18); }
+
+.sv-stage { position: relative; height: 100%; aspect-ratio: 9 / 16; background: #000; overflow: hidden; }
+.sv-media, .sv-media img, .sv-media video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sv-media .bg { position: absolute; inset: -20px; background: center/cover; filter: blur(24px) brightness(.6); }
+.sv-media img.fit, .sv-media video.fit { object-fit: contain; }
+.sv-stage::after { content: ""; position: absolute; inset: 0 0 auto 0; height: 110px; background: linear-gradient(rgba(0,0,0,.55), transparent); pointer-events: none; }
+.sv-progress { position: absolute; top: 10px; left: 12px; right: 12px; height: 3px; border-radius: 3px; background: rgba(255,255,255,.3); z-index: 2; overflow: hidden; }
+.sv-progress span { display: block; height: 100%; width: 0; background: #fff; }
+.sv-top { position: absolute; top: 22px; left: 12px; right: 12px; z-index: 2; }
+.sv-acc { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.sv-acc .avatar { width: 38px; height: 38px; border: 2px solid #2aabee; }
+.sv-acc small { display: block; font-weight: 400; opacity: .8; font-size: 12px; }
+.sv-loading { position: absolute; inset: auto 0 18px; text-align: center; color: #fff; font-size: 13px; z-index: 2; text-shadow: 0 1px 4px #000; }
+
+.sv-side { display: flex; flex-direction: column; gap: 14px; padding: 26px 26px 18px; min-width: 0; overflow: hidden; }
+.sv-head { display: flex; align-items: center; gap: 10px; padding-right: 40px; }
+.sv-caption { margin: 0; font-size: 20px; line-height: 1.45; font-weight: 600; white-space: pre-wrap; max-height: 150px; overflow: auto; }
+.sv-caption.empty { color: var(--muted); font-weight: 400; font-size: 15px; font-style: italic; }
+.sv-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sv-stat { position: relative; border-radius: 18px; padding: 16px 18px; overflow: hidden; display: flex; flex-direction: column; }
+.sv-stat.views { background: linear-gradient(135deg, rgba(42,171,238,.22), rgba(42,171,238,.06)); border: 1px solid rgba(42,171,238,.35); }
+.sv-stat.reacts { background: linear-gradient(135deg, rgba(236,72,153,.22), rgba(236,72,153,.06)); border: 1px solid rgba(236,72,153,.35); }
+.sv-stat .ic { position: absolute; right: 14px; top: 10px; font-size: 34px; opacity: .35; }
+.sv-stat b { font-size: 44px; line-height: 1.05; font-weight: 900; letter-spacing: -1px; }
+.sv-stat small { color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; }
+.sv-emojis { display: flex; flex-wrap: wrap; gap: 8px; }
+.sv-emojis span { display: flex; align-items: center; gap: 6px; background: var(--card2); border-radius: 99px; padding: 6px 14px 6px 10px; font-weight: 800; font-size: 15px; }
+.sv-emojis span i { font-style: normal; font-size: 24px; }
+.sv-vhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
+.sv-vhead h3 { margin: 0; font-size: 15px; }
+.sv-side #vSearch { margin: 0; }
+.sv-side .vlist { flex: 1; min-height: 0; }
+.vrow .avatar { width: 40px; height: 40px; }
+.vrow .r { font-size: 26px; }
+
+@media (max-width: 820px) {
+  .sv { grid-template-columns: 1fr; height: 94vh; overflow: auto; }
+  .sv-stage { aspect-ratio: auto; height: 52vh; }
+  .sv-side { overflow: visible; }
+  .sv-side .vlist { min-height: 200px; }
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a3658; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #3a4a75; }

@@ -105,16 +105,42 @@
 
     <!-- VIEWERS MODAL -->
     <div id="vModal" class="modal hidden">
-      <div class="sheet wide">
-        <div class="between"><h2 id="vTitle">Viewers</h2><button class="x" id="vClose">✕</button></div>
-        <div id="vSummary" class="vsum"></div>
-        <div class="gap">
-          <input id="vSearch" placeholder="Search viewer name…" />
-          <label class="check nowrap"><input type="checkbox" id="vReactFirst" checked /> Reactions first</label>
+      <div class="sv">
+        <button class="sv-close" id="vClose" aria-label="Close">✕</button>
+
+        <!-- left: the story itself -->
+        <div class="sv-stage">
+          <div id="svMedia" class="sv-media"></div>
+          <div class="sv-progress"><span id="svBar"></span></div>
+          <div class="sv-top">
+            <div id="svAcc" class="sv-acc"></div>
+          </div>
+          <div id="svLoading" class="sv-loading hidden">Loading story…</div>
         </div>
-        <div id="vList" class="vlist"></div>
-        <button id="vMore" class="ghost hidden">Load more</button>
-        <p id="vMsg" class="small"></p>
+
+        <!-- right: caption, numbers, viewers -->
+        <div class="sv-side">
+          <div class="sv-head">
+            <span id="svBadge" class="badge"></span>
+            <span id="svWhen" class="muted small"></span>
+          </div>
+          <p id="svCaption" class="sv-caption"></p>
+
+          <div class="sv-stats">
+            <div class="sv-stat views"><span class="ic">👁</span><b id="svViews">0</b><small>Views</small></div>
+            <div class="sv-stat reacts"><span class="ic">❤️</span><b id="svReacts">0</b><small>Reactions</small></div>
+          </div>
+          <div id="svEmojis" class="sv-emojis"></div>
+
+          <div class="sv-vhead">
+            <h3>Who watched <span id="svCount" class="muted"></span></h3>
+            <label class="check nowrap"><input type="checkbox" id="vReactFirst" checked /> Reactions first</label>
+          </div>
+          <input id="vSearch" placeholder="Search viewer name…" />
+          <div id="vList" class="vlist"></div>
+          <button id="vMore" class="ghost hidden">Load more</button>
+          <p id="vMsg" class="small"></p>
+        </div>
       </div>
     </div>
 

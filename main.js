@@ -467,6 +467,28 @@ ipcMain.handle("stories:thumb", async (_e, { id, storyId }) => {
   } catch (e) { logError("thumb", id, e); return fail(e); }
 });
 
+// full story (photo or video) for the big viewer, saved so it opens instantly next time
+ipcMain.handle("stories:full", async (_e, { id, storyId }) => {
+  const media = storyMedia.get(id + ":" + storyId);
+  const acc = getAccounts().find((a) => a.id === id);
+  if (!media || !acc) return fail("Refresh the stories list and try again.");
+  const isVideo = media instanceof Api.MessageMediaDocument;
+  const f = path.join(dataDir(), "stories", String(id).replace(/[^0-9]/g, "") + "_" + Number(storyId) + (isVideo ? ".mp4" : ".jpg"));
+  if (fs.existsSync(f) && fs.statSync(f).size > 0) return ok({ path: f, kind: isVideo ? "video" : "photo" });
+  try {
+    const c = await clientFor(acc);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    const tmp = f + ".part";
+    const buf = await c.downloadMedia(media, {
+      progressCallback: (got, total) => send("stories:fullProgress", { id, storyId, p: total ? Number(got) / Number(total) : 0 }),
+    });
+    if (!buf || !buf.length) return fail("Telegram didn't send the story file.");
+    fs.writeFileSync(tmp, buf);
+    fs.renameSync(tmp, f);
+    return ok({ path: f, kind: isVideo ? "video" : "photo" });
+  } catch (e) { logError("full", id, e); return fail(e); }
+});
+
 // ---------- viewer profile photos ----------
 const viewerUsers = new Map(); // "accountId:userId" -> User (needed to download the photo)
 ipcMain.handle("stories:viewerPhoto", async (_e, { id, userId }) => {

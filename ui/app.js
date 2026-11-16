@@ -287,6 +287,7 @@ const ago = (ts) => {
   return s < 60 ? "just now" : s < 3600 ? Math.floor(s / 60) + " min ago" : s < 86400 ? Math.floor(s / 3600) + " h ago" : when(ts);
 };
 let storiesCache = [];
+const storyThumbs = {}; // "accountId:storyId" -> sharp thumbnail
 
 // account picker = chips with profile photos (the hidden <select> keeps the value)
 function fillStatsAccounts() {
@@ -355,6 +356,7 @@ async function loadStories() {
     const t = await sc.storyThumb({ id, storyId: s.id }).catch(() => null);
     if ($("#statsAcc").value !== id) return;
     const el = document.querySelector(`#storyList .story[data-sid="${s.id}"] .th`);
+    if (t?.ok && t.photo) storyThumbs[id + ":" + s.id] = t.photo;
     if (t?.ok && t.photo && el) { el.style.backgroundImage = `url('${t.photo}')`; el.classList.add("sharp"); }
   }
 }
@@ -384,15 +386,74 @@ $("#statsAll").onclick = async () => {
 
 // viewers modal
 let vState = null;
+// count-up animation for the big numbers
+function countUp(el, to) {
+  const t0 = performance.now(), dur = 700;
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / dur);
+    el.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))).toLocaleString();
+    if (k < 1 && vState) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+function setBar(p) { $("#svBar").style.width = Math.max(0, Math.min(100, p * 100)) + "%"; }
+
 function openViewers(storyId) {
   const s = storiesCache.find((x) => x.id === storyId);
-  vState = { id: $("#statsAcc").value, storyId, next: "", list: [] };
-  $("#vTitle").textContent = `Story · ${when(s.date)}`;
-  $("#vSummary").innerHTML = `<span>👁 ${s.views} views</span><span>❤ ${s.reactionsCount} reactions</span><span class="muted">${s.reactions.map((x) => `${esc(x.emoji)} ${x.count}`).join("  ")}</span>`;
+  const accId = $("#statsAcc").value;
+  const acc = accounts.find((a) => a.id === accId) || { id: accId, name: "" };
+  vState = { id: accId, storyId, next: "", list: [] };
+  const st = vState;
+
+  // left: story (sharp thumbnail first, then the real photo/video)
+  const thumb = storyThumbs[accId + ":" + storyId] || s.thumb;
+  $("#svMedia").innerHTML = thumb ? `<div class="bg" style="background-image:url('${thumb}')"></div><img class="fit" src="${thumb}" alt="" />` : "";
+  $("#svAcc").innerHTML = `${avatarHtml(acc)}<div>${esc(acc.name)}<small>${ago(s.date)}</small></div>`;
+  setBar(0);
+  $("#svLoading").textContent = s.kind === "video" ? "Loading video…" : "Loading photo…";
+  $("#svLoading").classList.remove("hidden");
+  sc.storyFull({ id: accId, storyId }).then((r) => {
+    if (st !== vState) return;
+    $("#svLoading").classList.add("hidden");
+    if (!r.ok) { $("#svLoading").textContent = r.error; $("#svLoading").classList.remove("hidden"); return; }
+    const url = fileUrl(r.path);
+    const bg = thumb ? `<div class="bg" style="background-image:url('${thumb}')"></div>` : "";
+    if (r.kind === "video") {
+      $("#svMedia").innerHTML = bg + `<video class="fit" src="${url}" autoplay loop playsinline controls></video>`;
+      const v = $("#svMedia video");
+      v.volume = 0.6;
+      v.ontimeupdate = () => setBar(v.duration ? v.currentTime / v.duration : 0);
+    } else {
+      $("#svMedia").innerHTML = bg + `<img class="fit" src="${url}" alt="" />`;
+      setBar(1);
+    }
+  });
+
+  // right: caption + big numbers
+  $("#svBadge").className = "badge " + (s.active ? "live" : "old");
+  $("#svBadge").textContent = s.active ? "● Live" : "Ended";
+  const left = s.expires - Math.floor(Date.now() / 1000);
+  $("#svWhen").textContent = `Posted ${when(s.date)}` + (s.active ? ` · ends in ${left > 3600 ? Math.floor(left / 3600) + "h " : ""}${Math.floor((left % 3600) / 60)}m` : "");
+  $("#svCaption").textContent = s.caption || "No caption";
+  $("#svCaption").classList.toggle("empty", !s.caption);
+  countUp($("#svViews"), s.views);
+  countUp($("#svReacts"), s.reactionsCount);
+  $("#svEmojis").innerHTML = s.reactions.length
+    ? s.reactions.slice().sort((x, y) => y.count - x.count).map((x) => `<span><i>${esc(x.emoji)}</i>${x.count}</span>`).join("")
+    : `<span class="muted" style="font-weight:600">No reactions yet</span>`;
+  $("#svCount").textContent = "";
   $("#vSearch").value = "";
   $("#vModal").classList.remove("hidden");
   loadViewers(true);
 }
+sc.onFullProgress((p) => { if (vState && p.id === vState.id && p.storyId === vState.storyId) setBar(p.p); });
+function closeViewer() {
+  vState = null;
+  $("#vModal").classList.add("hidden");
+  $("#svMedia").innerHTML = ""; // stops the video
+}
+$("#vModal").addEventListener("click", (e) => { if (e.target.id === "vModal") closeViewer(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && vState) closeViewer(); });
 async function loadViewers(reset) {
   if (!vState) return;
   if (reset) { vState.next = ""; vState.list = []; $("#vList").innerHTML = ""; }
@@ -412,10 +473,11 @@ async function loadViewers(reset) {
     : `<div class="empty">${$("#vSearch").value ? "No viewer with that name." : "No viewers yet."}</div>`;
   $("#vMore").classList.toggle("hidden", !r.next);
   queueViewerPhotos(st.id, st.list);
-  say($("#vMsg"), `${st.list.length} of ${r.count} viewers shown`);
+  $("#svCount").textContent = `(${r.count})`;
+  say($("#vMsg"), r.next ? `${st.list.length} of ${r.count} shown` : "");
 }
 $("#vMore").onclick = () => loadViewers(false);
-$("#vClose").onclick = () => { vState = null; $("#vModal").classList.add("hidden"); };
+$("#vClose").onclick = closeViewer;
 $("#vReactFirst").onchange = () => loadViewers(true);
 let vTimer;
 $("#vSearch").oninput = () => { clearTimeout(vTimer); vTimer = setTimeout(() => loadViewers(true), 450); };
