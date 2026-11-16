@@ -42,6 +42,7 @@ async function loadAccounts() {
   $("#accCount").textContent = accounts.length;
   renderPostAccounts();
   renderAccTable();
+  fillStatsAccounts();
 }
 function accLine(a) {
   return `<div class="avatar" style="background:${color(a.id)}">${esc(initials(a.name))}</div>
@@ -255,6 +256,106 @@ $("#postBtn").onclick = () => {
   runPost();
 };
 $("#stopBtn").onclick = async () => { await sc.cancelPost(); say($("#postMsg"), "Stopping after the current account…"); };
+
+// ---------- my stories: views + reactions ----------
+const when = (ts) => new Date(ts * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const ago = (ts) => {
+  const s = Math.floor(Date.now() / 1000) - ts;
+  return s < 60 ? "just now" : s < 3600 ? Math.floor(s / 60) + " min ago" : s < 86400 ? Math.floor(s / 3600) + " h ago" : when(ts);
+};
+let storiesCache = [];
+
+function fillStatsAccounts() {
+  const sel = $("#statsAcc"), cur = sel.value;
+  sel.innerHTML = accounts.length ? accounts.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}${a.username ? " (@" + esc(a.username) + ")" : ""}</option>`).join("") : `<option value="">No accounts</option>`;
+  if (accounts.some((a) => a.id === cur)) sel.value = cur;
+}
+async function loadStories() {
+  const id = $("#statsAcc").value;
+  $("#storyList").innerHTML = "";
+  if (!id) return say($("#statsMsg"), "Add an account first.");
+  say($("#statsMsg"), "Loading stories…");
+  const r = await sc.listStories(id);
+  if ($("#statsAcc").value !== id) return;
+  if (!r.ok) return say($("#statsMsg"), r.error, "err");
+  storiesCache = r.stories;
+  if (!r.stories.length) return say($("#statsMsg"), "No stories on this account yet.");
+  const live = r.stories.filter((s) => s.active).length;
+  say($("#statsMsg"), `${r.stories.length} stories (${live} live now). Click one to see who viewed and reacted.`);
+  $("#storyList").innerHTML = r.stories.map((s) => `<button class="story" data-sid="${s.id}">
+      <div class="th" style="${s.thumb ? `background-image:url('${s.thumb}')` : ""}">${s.kind === "video" ? "▶" : ""}</div>
+      <div class="info">
+        <span class="badge ${s.active ? "live" : "old"}">${s.active ? "● Live" : "Ended"}</span>
+        <span class="muted small">${when(s.date)}</span>
+        <div class="nums"><span title="Views">👁 ${s.views}</span><span title="Reactions">❤ ${s.reactionsCount}</span></div>
+        <div class="rx">${s.reactions.slice(0, 5).map((x) => `${esc(x.emoji)} ${x.count}`).join(" · ")}</div>
+        ${s.caption ? `<div class="cap">${esc(s.caption)}</div>` : ""}
+      </div></button>`).join("");
+  $$("#storyList .story").forEach((b) => (b.onclick = () => openViewers(Number(b.dataset.sid))));
+}
+$("#statsAcc").onchange = () => { $("#statsTotals").classList.add("hidden"); loadStories(); };
+$("#statsRefresh").onclick = loadStories;
+
+// Totals: live stories on every account, one account at a time (gentle on Telegram)
+$("#statsAll").onclick = async () => {
+  const box = $("#statsTotals");
+  box.classList.remove("hidden");
+  box.innerHTML = "";
+  let views = 0, reacts = 0, live = 0;
+  const totalsCard = () => `<div class="tot"><b>👁 ${views}</b><span>Total views (live stories)</span></div><div class="tot"><b>❤ ${reacts}</b><span>Total reactions</span></div><div class="tot"><b>${live}</b><span>Live stories</span></div>`;
+  const rows = [];
+  for (const a of accounts) {
+    box.innerHTML = totalsCard() + rows.join("") + `<div class="tot"><b>…</b><span>${esc(a.name)}</span></div>`;
+    const r = await sc.listStories(a.id);
+    if (!r.ok) { rows.push(`<div class="tot"><b class="msg-err">!</b><span>${esc(a.name)}: ${esc(r.error)}</span></div>`); continue; }
+    const act = r.stories.filter((s) => s.active);
+    const v = act.reduce((n, s) => n + s.views, 0), x = act.reduce((n, s) => n + s.reactionsCount, 0);
+    views += v; reacts += x; live += act.length;
+    rows.push(`<div class="tot"><b>👁 ${v} · ❤ ${x}</b><span>${esc(a.name)} (${act.length} live)</span></div>`);
+    await new Promise((res) => setTimeout(res, 800));
+  }
+  box.innerHTML = totalsCard() + rows.join("");
+};
+
+// viewers modal
+let vState = null;
+function openViewers(storyId) {
+  const s = storiesCache.find((x) => x.id === storyId);
+  vState = { id: $("#statsAcc").value, storyId, next: "", list: [] };
+  $("#vTitle").textContent = `Story · ${when(s.date)}`;
+  $("#vSummary").innerHTML = `<span>👁 ${s.views} views</span><span>❤ ${s.reactionsCount} reactions</span><span class="muted">${s.reactions.map((x) => `${esc(x.emoji)} ${x.count}`).join("  ")}</span>`;
+  $("#vSearch").value = "";
+  $("#vModal").classList.remove("hidden");
+  loadViewers(true);
+}
+async function loadViewers(reset) {
+  if (!vState) return;
+  if (reset) { vState.next = ""; vState.list = []; $("#vList").innerHTML = ""; }
+  const st = vState;
+  say($("#vMsg"), "Loading viewers…");
+  $("#vMore").classList.add("hidden");
+  const r = await sc.viewers({ id: st.id, storyId: st.storyId, offset: st.next, reactionsFirst: $("#vReactFirst").checked, q: $("#vSearch").value.trim() });
+  if (st !== vState) return;
+  if (!r.ok) return say($("#vMsg"), r.error, "err");
+  st.list.push(...r.viewers);
+  st.next = r.next;
+  $("#vList").innerHTML = st.list.length ? st.list.map((v) => `<div class="vrow">
+      <div class="avatar" style="background:${color(v.id)}">${esc(initials(v.name))}</div>
+      <div class="who"><b>${esc(v.name)}</b><span>${v.username ? "@" + esc(v.username) + " · " : ""}${ago(v.date)}</span></div>
+      <span class="r">${esc(v.reaction)}</span></div>`).join("")
+    : `<div class="empty">${$("#vSearch").value ? "No viewer with that name." : "No viewers yet."}</div>`;
+  $("#vMore").classList.toggle("hidden", !r.next);
+  say($("#vMsg"), `${st.list.length} of ${r.count} viewers shown`);
+}
+$("#vMore").onclick = () => loadViewers(false);
+$("#vClose").onclick = () => { vState = null; $("#vModal").classList.add("hidden"); };
+$("#vReactFirst").onchange = () => loadViewers(true);
+let vTimer;
+$("#vSearch").oninput = () => { clearTimeout(vTimer); vTimer = setTimeout(() => loadViewers(true), 450); };
+
+$$(".tab").forEach((b) => b.addEventListener("click", () => {
+  if (b.dataset.tab === "stats") { fillStatsAccounts(); if (!$("#storyList").children.length) loadStories(); }
+}));
 
 // ---------- start ----------
 (async () => {

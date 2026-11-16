@@ -11,6 +11,7 @@
     <div class="brand"><span class="logo">▶</span> StoryCast <small>Telegram Stories to all your accounts</small></div>
     <nav>
       <button class="tab active" data-tab="post">Post Story</button>
+      <button class="tab" data-tab="stats">My Stories</button>
       <button class="tab" data-tab="accounts">Accounts <span id="accCount" class="pill">0</span></button>
       <button class="tab" data-tab="settings">Settings</button>
     </nav>
@@ -83,6 +84,38 @@
         </div>
       </div>
     </section>
+
+    <!-- MY STORIES: views + reactions -->
+    <section id="tab-stats" class="panel">
+      <div class="card">
+        <div class="between wrap">
+          <h2>Views &amp; reactions</h2>
+          <div class="gap">
+            <select id="statsAcc" class="inline"></select>
+            <button id="statsRefresh" class="ghost">Refresh</button>
+            <button id="statsAll" class="ghost">Totals for all accounts</button>
+          </div>
+        </div>
+        <div id="statsTotals" class="totals hidden"></div>
+        <p id="statsMsg" class="small muted"></p>
+        <div id="storyList" class="storylist"></div>
+      </div>
+    </section>
+
+    <!-- VIEWERS MODAL -->
+    <div id="vModal" class="modal hidden">
+      <div class="sheet wide">
+        <div class="between"><h2 id="vTitle">Viewers</h2><button class="x" id="vClose">✕</button></div>
+        <div id="vSummary" class="vsum"></div>
+        <div class="gap">
+          <input id="vSearch" placeholder="Search viewer name…" />
+          <label class="check nowrap"><input type="checkbox" id="vReactFirst" checked /> Reactions first</label>
+        </div>
+        <div id="vList" class="vlist"></div>
+        <button id="vMore" class="ghost hidden">Load more</button>
+        <p id="vMsg" class="small"></p>
+      </div>
+    </div>
 
     <!-- ACCOUNTS -->
     <section id="tab-accounts" class="panel">

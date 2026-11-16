@@ -77,7 +77,7 @@ function explain(err) {
   if (m.includes("STORIES_TOO_MUCH")) return "Daily Story limit reached for this account (free accounts can post only a few per day).";
   if (m.includes("PREMIUM_ACCOUNT_REQUIRED")) return "This needs Telegram Premium on this account.";
   if (m.includes("STORY_PERIOD_INVALID")) return "This Story duration needs Premium. Use 24 hours.";
-  if (m.includes("MEDIA_") || m.includes("VIDEO_")) return "Telegram didn't accept this file. Use a vertical MP4 up to 60 seconds, or a JPG/PNG photo.";
+  if (m.includes("MEDIA_") || m.includes("VIDEO_")) return `Telegram didn't accept this file (${m}). Use a vertical MP4 (H.264) up to 60 seconds, or a JPG/PNG photo.`;
   return m;
 }
 const ok = (data = {}) => ({ ok: true, ...data });
@@ -300,6 +300,7 @@ ipcMain.handle("post:start", async (_e, job) => {
       results.push({ id: acc.id, ok: true });
     } catch (e) {
       send("post:progress", { id: acc.id, status: "error", msg: explain(e) });
+      try { fs.appendFileSync(file("errors.log"), JSON.stringify({ at: new Date().toISOString(), account: acc.id, error: String(e?.errorMessage || e?.message || e), media: { name: job.media.name, size: job.media.size, kind: job.media.kind, mime: job.media.mime }, meta: job.meta }) + "\n"); } catch {}
       results.push({ id: acc.id, ok: false });
     }
     // wait between accounts (with a little randomness) so it doesn't look like spam
@@ -315,6 +316,90 @@ ipcMain.handle("post:start", async (_e, job) => {
   return ok({ done: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length });
 });
 ipcMain.handle("post:cancel", () => { cancelRun = true; return ok(); });
+
+// ---------- my stories: views + reactions ----------
+const { strippedPhotoToJpg } = require("telegram/Utils");
+
+function reactionText(r) {
+  if (!r) return "";
+  if (r instanceof Api.ReactionEmoji) return r.emoticon;
+  if (r instanceof Api.ReactionPaid) return "⭐";
+  return "💟"; // custom (premium) emoji: shown as a heart, the real sticker needs a download
+}
+function thumbOf(media) {
+  const sizes = media?.photo?.sizes || media?.document?.thumbs || [];
+  const s = sizes.find((x) => x instanceof Api.PhotoStrippedSize);
+  if (!s) return "";
+  try { return "data:image/jpeg;base64," + Buffer.from(strippedPhotoToJpg(s.bytes)).toString("base64"); } catch { return ""; }
+}
+function storySummary(st) {
+  const v = st.views;
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    id: st.id,
+    date: st.date,
+    expires: st.expireDate,
+    active: st.expireDate > now,
+    caption: st.caption || "",
+    kind: st.media instanceof Api.MessageMediaDocument ? "video" : "photo",
+    thumb: thumbOf(st.media),
+    views: v?.viewsCount || 0,
+    reactionsCount: v?.reactionsCount || 0,
+    reactions: (v?.reactions || []).map((r) => ({ emoji: reactionText(r.reaction), count: r.count })),
+    hasViewers: !!v?.hasViewers,
+  };
+}
+
+ipcMain.handle("stories:list", async (_e, id) => {
+  const acc = getAccounts().find((a) => a.id === id);
+  if (!acc) return fail("Account not found.");
+  try {
+    const c = await clientFor(acc);
+    const self = new Api.InputPeerSelf();
+    const [active, archive] = await Promise.all([
+      c.invoke(new Api.stories.GetPeerStories({ peer: self })),
+      c.invoke(new Api.stories.GetStoriesArchive({ peer: self, offsetId: 0, limit: 30 })).catch(() => null),
+    ]);
+    const map = new Map();
+    for (const st of [...(archive?.stories || []), ...(active?.stories?.stories || [])]) {
+      if (st instanceof Api.StoryItem) map.set(st.id, storySummary(st));
+    }
+    const list = [...map.values()].sort((a, b) => b.date - a.date);
+    return ok({ stories: list, premium: acc.premium });
+  } catch (e) { return fail(e); }
+});
+
+ipcMain.handle("stories:viewers", async (_e, { id, storyId, offset, reactionsFirst, q }) => {
+  const acc = getAccounts().find((a) => a.id === id);
+  if (!acc) return fail("Account not found.");
+  try {
+    const c = await clientFor(acc);
+    const r = await c.invoke(new Api.stories.GetStoryViewsList({
+      peer: new Api.InputPeerSelf(),
+      id: storyId,
+      offset: offset || "",
+      limit: 50,
+      reactionsFirst: !!reactionsFirst,
+      q: q ? String(q).slice(0, 64) : undefined,
+    }));
+    const users = new Map(r.users.map((u) => [String(u.id), u]));
+    const viewers = r.views.filter((v) => v instanceof Api.StoryView).map((v) => {
+      const u = users.get(String(v.userId));
+      return {
+        id: String(v.userId),
+        name: u ? [u.firstName, u.lastName].filter(Boolean).join(" ") || "Deleted account" : "Unknown",
+        username: u?.username || "",
+        date: v.date,
+        reaction: reactionText(v.reaction),
+      };
+    });
+    return ok({ viewers, count: r.count, views: r.viewsCount, reactions: r.reactionsCount, next: r.nextOffset || "" });
+  } catch (e) {
+    const m = String(e?.errorMessage || e);
+    if (m.includes("PREMIUM")) return fail("Telegram shows the viewer list only for 24h after a Story ends. After that it needs Premium (view counts still work).");
+    return fail(e);
+  }
+});
 
 // ---------- window ----------
 function createWindow() {

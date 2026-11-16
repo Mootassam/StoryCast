@@ -18,5 +18,7 @@ contextBridge.exposeInMainWorld("sc", {
   pathOf: (f) => webUtils.getPathForFile(f),
   post: call("post:start"),
   cancelPost: call("post:cancel"),
+  listStories: call("stories:list"),
+  viewers: call("stories:viewers"),
   onProgress: (fn) => ipcRenderer.on("post:progress", (_e, v) => fn(v)),
 });
