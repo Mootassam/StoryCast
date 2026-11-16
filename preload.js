@@ -22,5 +22,6 @@ contextBridge.exposeInMainWorld("sc", {
   listStories: call("stories:list"),
   viewers: call("stories:viewers"),
   viewerPhoto: call("stories:viewerPhoto"),
+  storyThumb: call("stories:thumb"),
   onProgress: (fn) => ipcRenderer.on("post:progress", (_e, v) => fn(v)),
 });

@@ -399,7 +399,7 @@ ipcMain.handle("stories:list", async (_e, id) => {
     ]);
     const map = new Map();
     for (const st of [...(archive?.stories || []), ...(active?.stories?.stories || [])]) {
-      if (st instanceof Api.StoryItem) map.set(st.id, storySummary(st));
+      if (st instanceof Api.StoryItem) { map.set(st.id, storySummary(st)); storyMedia.set(id + ":" + st.id, st.media); }
     }
     const list = [...map.values()].sort((a, b) => b.date - a.date);
     return ok({ stories: list, premium: acc.premium });
@@ -438,6 +438,33 @@ ipcMain.handle("stories:viewers", async (_e, { id, storyId, offset, reactionsFir
     if (m.includes("PREMIUM")) return fail("Telegram shows the viewer list only for 24h after a Story ends. After that it needs Premium (view counts still work).");
     return fail(e);
   }
+});
+
+// ---------- sharp story thumbnails (the built-in preview is only ~40px, so it looks blurry) ----------
+const storyMedia = new Map(); // "accountId:storyId" -> MessageMedia
+function pickThumb(media) {
+  const sizes = (media?.photo?.sizes || media?.document?.thumbs || []).filter(
+    (s) => (s instanceof Api.PhotoSize || s instanceof Api.PhotoSizeProgressive || s instanceof Api.PhotoCachedSize) && s.w
+  );
+  if (!sizes.length) return null;
+  sizes.sort((a, b) => a.w - b.w);
+  return sizes.find((s) => s.w >= 320) || sizes[sizes.length - 1]; // ~320px is sharp for the card
+}
+ipcMain.handle("stories:thumb", async (_e, { id, storyId }) => {
+  const f = path.join(dataDir(), "thumbs", String(id).replace(/[^0-9]/g, "") + "_" + Number(storyId) + ".jpg");
+  if (fs.existsSync(f)) return ok({ photo: toDataUrl(fs.readFileSync(f)) });
+  const media = storyMedia.get(id + ":" + storyId);
+  const acc = getAccounts().find((a) => a.id === id);
+  const size = pickThumb(media);
+  if (!media || !acc || !size) return ok({ photo: "" });
+  try {
+    const c = await clientFor(acc);
+    const buf = await c.downloadMedia(media, { thumb: size });
+    if (!buf || !buf.length) return ok({ photo: "" });
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, buf);
+    return ok({ photo: toDataUrl(Buffer.from(buf)) });
+  } catch (e) { logError("thumb", id, e); return fail(e); }
 });
 
 // ---------- viewer profile photos ----------

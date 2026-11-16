@@ -350,6 +350,13 @@ async function loadStories() {
         ${s.caption ? `<div class="cap">${esc(s.caption)}</div>` : ""}
       </div></button>`).join("");
   $$("#storyList .story").forEach((b) => (b.onclick = () => openViewers(Number(b.dataset.sid))));
+  // swap the blurry preview for a sharp thumbnail, one story at a time
+  for (const s of r.stories) {
+    const t = await sc.storyThumb({ id, storyId: s.id }).catch(() => null);
+    if ($("#statsAcc").value !== id) return;
+    const el = document.querySelector(`#storyList .story[data-sid="${s.id}"] .th`);
+    if (t?.ok && t.photo && el) { el.style.backgroundImage = `url('${t.photo}')`; el.classList.add("sharp"); }
+  }
 }
 $("#statsAcc").onchange = () => { $("#statsTotals").classList.add("hidden"); loadStories(); };
 $("#statsRefresh").onclick = loadStories;

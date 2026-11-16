@@ -111,3 +111,5 @@ img.avatar { object-fit: cover; background: var(--card2); }
 .chip.on { border-color: var(--brand); background: rgba(42,171,238,.12); }
 .tot.acc { display: flex; align-items: center; gap: 10px; }
 .tot.acc b { font-size: 15px; }
+.story .th { width: 72px; height: 120px; filter: blur(2px); transition: filter .25s; }
+.story .th.sharp { filter: none; }
