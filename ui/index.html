@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data:; media-src 'self' file:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>StoryCast</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo">▶</span> StoryCast <small>Telegram Stories to all your accounts</small></div>
+    <nav>
+      <button class="tab active" data-tab="post">Post Story</button>
+      <button class="tab" data-tab="accounts">Accounts <span id="accCount" class="pill">0</span></button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- POST -->
+    <section id="tab-post" class="panel active">
+      <div class="grid2">
+        <div class="card">
+          <h2>1. Video or photo</h2>
+          <div id="drop" class="drop">
+            <div id="dropEmpty">
+              <div class="big">⬆</div>
+              <p><b>Drop a video or photo here</b> or click to choose</p>
+              <p class="muted">Best: vertical 9:16 MP4, up to 60 seconds · or JPG/PNG</p>
+            </div>
+            <div id="preview" class="hidden"></div>
+          </div>
+          <p id="mediaInfo" class="muted small"></p>
+
+          <h2>2. Caption <span class="muted small">(optional)</span></h2>
+          <textarea id="caption" rows="3" maxlength="2048" placeholder="Write a caption…"></textarea>
+
+          <div class="row3">
+            <label>Who can see it
+              <select id="privacy">
+                <option value="everyone">Everyone</option>
+                <option value="contacts">My contacts</option>
+                <option value="close">Close friends</option>
+              </select>
+            </label>
+            <label>Stays for
+              <select id="period">
+                <option value="86400">24 hours</option>
+                <option value="21600">6 hours ★</option>
+                <option value="43200">12 hours ★</option>
+                <option value="172800">48 hours ★</option>
+              </select>
+            </label>
+            <label>Wait between accounts
+              <select id="delay">
+                <option value="10">~10 seconds</option>
+                <option value="20" selected>~20 seconds</option>
+                <option value="45">~45 seconds</option>
+                <option value="90">~90 seconds</option>
+              </select>
+            </label>
+          </div>
+          <p class="muted small">★ = Premium accounts only. Free accounts automatically use 24 hours.</p>
+        </div>
+
+        <div class="card">
+          <div class="between">
+            <h2>3. Choose accounts</h2>
+            <div class="links"><button class="link" id="selAll">All</button> · <button class="link" id="selNone">None</button></div>
+          </div>
+          <div id="postAccounts" class="acclist"></div>
+          <div id="noAccounts" class="empty hidden">No accounts yet. <button class="link" data-goto="accounts">Add an account →</button></div>
+
+          <label class="check"><input type="checkbox" id="useSchedule" /> Schedule for later</label>
+          <input type="datetime-local" id="scheduleAt" class="hidden" />
+          <p id="scheduleNote" class="muted small hidden">Keep StoryCast open: it posts at that time.</p>
+
+          <div class="actions">
+            <button id="postBtn" class="primary">Post to 0 accounts</button>
+            <button id="stopBtn" class="ghost hidden">Stop</button>
+          </div>
+          <p id="postMsg" class="small"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACCOUNTS -->
+    <section id="tab-accounts" class="panel">
+      <div class="card">
+        <div class="between">
+          <h2>Your Telegram accounts</h2>
+          <div class="gap">
+            <button id="checkAll" class="ghost">Check all</button>
+            <button id="addAcc" class="primary">+ Add account</button>
+          </div>
+        </div>
+        <p class="muted small">Each account logs in once with its phone number + the code Telegram sends. Logins are saved encrypted on this computer only.</p>
+        <div id="accTable" class="acctable"></div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="tab-settings" class="panel">
+      <div class="card narrow">
+        <h2>Telegram API keys</h2>
+        <p class="muted">Telegram gives these free. You need them once.</p>
+        <ol class="steps">
+          <li>Open <button class="link" id="openApi">my.telegram.org/apps</button> and log in with your phone.</li>
+          <li>Create an app (any name, e.g. “StoryCast”, platform Desktop).</li>
+          <li>Copy <b>App api_id</b> and <b>App api_hash</b> here.</li>
+        </ol>
+        <label>API ID <input id="apiId" inputmode="numeric" placeholder="e.g. 1234567" /></label>
+        <label>API hash <input id="apiHash" type="password" placeholder="32 characters" autocomplete="off" /></label>
+        <button id="saveCfg" class="primary">Save</button>
+        <p id="cfgMsg" class="small"></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ADD ACCOUNT MODAL -->
+  <div id="modal" class="modal hidden">
+    <div class="sheet">
+      <div class="between"><h2>Add Telegram account</h2><button class="x" id="closeModal">✕</button></div>
+      <div id="stepPhone">
+        <label>Phone number (with country code) <input id="phone" placeholder="+62 812 3456 7890" /></label>
+        <button id="sendCode" class="primary">Send code</button>
+      </div>
+      <div id="stepCode" class="hidden">
+        <p id="codeWhere" class="muted"></p>
+        <label>Login code <input id="code" inputmode="numeric" placeholder="12345" autocomplete="one-time-code" /></label>
+        <button id="signIn" class="primary">Log in</button>
+      </div>
+      <div id="stepPw" class="hidden">
+        <p class="muted">This account has 2-step verification. <span id="pwHint"></span></p>
+        <label>Your 2-step password <input id="pw" type="password" autocomplete="off" /></label>
+        <button id="sendPw" class="primary">Log in</button>
+      </div>
+      <p id="modalMsg" class="small"></p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "storycast",
+  "version": "0.1.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "license": "UNLICENSED",
+  "description": "Post one Telegram Story to many of your own accounts",
+  "dependencies": {
+    "telegram": "^2.26.22"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11"
+  },
+  "productName": "StoryCast",
+  "private": true
+}
