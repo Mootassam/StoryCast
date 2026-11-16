@@ -7,25 +7,28 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="top">
-    <div class="brand"><span class="logo">▶</span> StoryCast <small>Telegram Stories to all your accounts</small></div>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="logo">▶</span><div>StoryCast<small>Telegram Stories</small></div></div>
     <nav>
-      <button class="tab active" data-tab="post">Post Story</button>
-      <button class="tab" data-tab="stats">My Stories</button>
-      <button class="tab" data-tab="accounts">Accounts <span id="accCount" class="pill">0</span></button>
-      <button class="tab" data-tab="settings">Settings</button>
+      <button class="tab active" data-tab="post"><i>＋</i><span>Post Story</span></button>
+      <button class="tab" data-tab="stats"><i>📊</i><span>My Stories</span></button>
+      <button class="tab" data-tab="accounts"><i>👥</i><span>Accounts</span><b id="accCount" class="pill">0</b></button>
+      <button class="tab" data-tab="settings"><i>⚙</i><span>Settings</span></button>
     </nav>
-  </header>
+    <div class="side-foot">🔒 Logins stay encrypted on this PC</div>
+  </aside>
 
   <main>
     <!-- POST -->
     <section id="tab-post" class="panel active">
+      <div class="page-head"><h1>Post a Story</h1><p>One video or photo → all the accounts you pick.</p></div>
       <div class="grid2">
         <div class="card">
-          <h2>1. Video or photo</h2>
+          <h2><span class="step">1</span> Video or photo</h2>
           <div id="drop" class="drop">
             <div id="dropEmpty">
-              <div class="big">⬆</div>
+              <div class="big"><span>⬆</span></div>
               <p><b>Drop a video or photo here</b> or click to choose</p>
               <p class="muted">Best: vertical 9:16 MP4, up to 60 seconds · or JPG/PNG</p>
             </div>
@@ -33,7 +36,7 @@
           </div>
           <p id="mediaInfo" class="muted small"></p>
 
-          <h2>2. Caption <span class="muted small">(optional)</span></h2>
+          <h2><span class="step">2</span> Caption <span class="muted small">(optional)</span></h2>
           <textarea id="caption" rows="3" maxlength="2048" placeholder="Write a caption…"></textarea>
 
           <div class="row3">
@@ -66,7 +69,7 @@
 
         <div class="card">
           <div class="between">
-            <h2>3. Choose accounts</h2>
+            <h2><span class="step">3</span> Choose accounts</h2>
             <div class="links"><button class="link" id="selAll">All</button> · <button class="link" id="selNone">None</button></div>
           </div>
           <div id="postAccounts" class="acclist"></div>
@@ -87,6 +90,7 @@
 
     <!-- MY STORIES: views + reactions -->
     <section id="tab-stats" class="panel">
+      <div class="page-head"><h1>My Stories</h1><p>Views, reactions and who watched, for every account.</p></div>
       <div class="card">
         <div class="between wrap">
           <h2>Views &amp; reactions</h2>
@@ -146,6 +150,7 @@
 
     <!-- ACCOUNTS -->
     <section id="tab-accounts" class="panel">
+      <div class="page-head"><h1>Accounts</h1><p>Your connected Telegram accounts.</p></div>
       <div class="card">
         <div class="between">
           <h2>Your Telegram accounts</h2>
@@ -161,6 +166,7 @@
 
     <!-- SETTINGS -->
     <section id="tab-settings" class="panel">
+      <div class="page-head"><h1>Settings</h1><p>Connect StoryCast to Telegram (one time).</p></div>
       <div class="card narrow">
         <h2>Telegram API keys</h2>
         <p class="muted">Telegram gives these free. You need them once.</p>
@@ -199,6 +205,7 @@
     </div>
   </div>
 
+</div>
   <script src="app.js"></script>
 </body>
 </html>
