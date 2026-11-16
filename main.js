@@ -318,6 +318,10 @@ ipcMain.handle("post:start", async (_e, job) => {
 });
 ipcMain.handle("post:cancel", () => { cancelRun = true; return ok(); });
 
+function logError(what, account, e) {
+  try { fs.mkdirSync(dataDir(), { recursive: true }); fs.appendFileSync(file("errors.log"), JSON.stringify({ at: new Date().toISOString(), what, account, error: String(e?.errorMessage || e?.message || e) }) + "\n"); } catch {}
+}
+
 // ---------- profile photos of connected accounts ----------
 const avatarFile = (id) => path.join(dataDir(), "avatars", String(id).replace(/\D/g, "") + ".jpg");
 const toDataUrl = (buf) => "data:image/jpeg;base64," + buf.toString("base64");
@@ -344,7 +348,10 @@ ipcMain.handle("acc:photo", async (_e, { id, fresh }) => {
   const f = avatarFile(id);
   if (!fresh && fs.existsSync(f)) return ok({ photo: toDataUrl(fs.readFileSync(f)) });
   try { return ok({ photo: await downloadAvatar(acc) }); }
-  catch (e) { return fs.existsSync(f) ? ok({ photo: toDataUrl(fs.readFileSync(f)) }) : fail(e); }
+  catch (e) {
+    logError("photo", id, e);
+    return fs.existsSync(f) ? ok({ photo: toDataUrl(fs.readFileSync(f)) }) : fail(e);
+  }
 });
 
 // ---------- my stories: views + reactions ----------
@@ -413,6 +420,7 @@ ipcMain.handle("stories:viewers", async (_e, { id, storyId, offset, reactionsFir
       q: q ? String(q).slice(0, 64) : undefined,
     }));
     const users = new Map(r.users.map((u) => [String(u.id), u]));
+    for (const u of r.users) viewerUsers.set(id + ":" + u.id, u);
     const viewers = r.views.filter((v) => v instanceof Api.StoryView).map((v) => {
       const u = users.get(String(v.userId));
       return {
@@ -421,6 +429,7 @@ ipcMain.handle("stories:viewers", async (_e, { id, storyId, offset, reactionsFir
         username: u?.username || "",
         date: v.date,
         reaction: reactionText(v.reaction),
+        hasPhoto: !!(u && u.photo instanceof Api.UserProfilePhoto),
       };
     });
     return ok({ viewers, count: r.count, views: r.viewsCount, reactions: r.reactionsCount, next: r.nextOffset || "" });
@@ -429,6 +438,25 @@ ipcMain.handle("stories:viewers", async (_e, { id, storyId, offset, reactionsFir
     if (m.includes("PREMIUM")) return fail("Telegram shows the viewer list only for 24h after a Story ends. After that it needs Premium (view counts still work).");
     return fail(e);
   }
+});
+
+// ---------- viewer profile photos ----------
+const viewerUsers = new Map(); // "accountId:userId" -> User (needed to download the photo)
+ipcMain.handle("stories:viewerPhoto", async (_e, { id, userId }) => {
+  const u = viewerUsers.get(id + ":" + userId);
+  if (!u || !(u.photo instanceof Api.UserProfilePhoto)) return ok({ photo: "" });
+  const f = path.join(dataDir(), "avatars", "viewers", String(userId).replace(/\D/g, "") + "_" + String(u.photo.photoId) + ".jpg");
+  if (fs.existsSync(f)) return ok({ photo: toDataUrl(fs.readFileSync(f)) });
+  const acc = getAccounts().find((a) => a.id === id);
+  if (!acc) return ok({ photo: "" });
+  try {
+    const c = await clientFor(acc);
+    const buf = await c.downloadProfilePhoto(u, { isBig: false });
+    if (!buf || !buf.length) return ok({ photo: "" });
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, buf);
+    return ok({ photo: toDataUrl(Buffer.from(buf)) });
+  } catch (e) { return fail(e); }
 });
 
 // ---------- window ----------

@@ -58,8 +58,11 @@ function loadPhotos(fresh, ids) {
     if (!fresh && a.id in photos) continue;
     photoQueue = photoQueue.then(async () => {
       const r = await sc.accountPhoto({ id: a.id, fresh });
-      if (r.ok) { photos[a.id] = r.photo; $(`[data-id="${CSS.escape(a.id)}"] .avatar`).forEach((el) => (el.outerHTML = avatarHtml(a))); }
-    });
+      if (r.ok) {
+        photos[a.id] = r.photo;
+        $$(`[data-id="${CSS.escape(a.id)}"] .avatar, [data-acc="${CSS.escape(a.id)}"] .avatar`).forEach((el) => (el.outerHTML = avatarHtml(a)));
+      }
+    }).catch(() => {}); // one failed photo must not stop the others
   }
 }
 function accLine(a) {
@@ -285,10 +288,45 @@ const ago = (ts) => {
 };
 let storiesCache = [];
 
+// account picker = chips with profile photos (the hidden <select> keeps the value)
 function fillStatsAccounts() {
   const sel = $("#statsAcc"), cur = sel.value;
-  sel.innerHTML = accounts.length ? accounts.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}${a.username ? " (@" + esc(a.username) + ")" : ""}</option>`).join("") : `<option value="">No accounts</option>`;
+  sel.innerHTML = accounts.length ? accounts.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("") : `<option value="">No accounts</option>`;
   if (accounts.some((a) => a.id === cur)) sel.value = cur;
+  renderStatsChips();
+}
+function renderStatsChips() {
+  const cur = $("#statsAcc").value;
+  $("#statsChips").innerHTML = accounts.map((a) => `<button class="chip ${a.id === cur ? "on" : ""}" data-acc="${esc(a.id)}">${avatarHtml(a)}<span>${esc(a.name)}</span></button>`).join("");
+  $$("#statsChips .chip").forEach((b) => (b.onclick = () => {
+    if ($("#statsAcc").value === b.dataset.acc) return;
+    $("#statsAcc").value = b.dataset.acc;
+    renderStatsChips();
+    $("#statsAcc").onchange();
+  }));
+}
+
+// viewer photos: downloaded a few at a time, kept for this session
+const viewerPhotos = {};
+let vPhotoQueue = [], vPhotoBusy = 0;
+function viewerAvatar(v) {
+  return viewerPhotos[v.id]
+    ? `<img class="avatar" src="${viewerPhotos[v.id]}" alt="" />`
+    : `<div class="avatar" style="background:${color(v.id)}">${esc(initials(v.name))}</div>`;
+}
+function queueViewerPhotos(accId, list) {
+  for (const v of list) if (v.hasPhoto && !(v.id in viewerPhotos) && !vPhotoQueue.some((q) => q.v.id === v.id)) vPhotoQueue.push({ accId, v });
+  pumpViewerPhotos();
+}
+function pumpViewerPhotos() {
+  while (vPhotoBusy < 2 && vPhotoQueue.length) {
+    const { accId, v } = vPhotoQueue.shift();
+    vPhotoBusy++;
+    sc.viewerPhoto({ id: accId, userId: v.id }).then((r) => {
+      viewerPhotos[v.id] = r.ok ? r.photo : "";
+      if (r.ok && r.photo) $$(`#vList [data-vid="${CSS.escape(v.id)}"] .avatar`).forEach((el) => (el.outerHTML = viewerAvatar(v)));
+    }).catch(() => {}).finally(() => { vPhotoBusy--; pumpViewerPhotos(); });
+  }
 }
 async function loadStories() {
   const id = $("#statsAcc").value;
@@ -327,11 +365,11 @@ $("#statsAll").onclick = async () => {
   for (const a of accounts) {
     box.innerHTML = totalsCard() + rows.join("") + `<div class="tot"><b>…</b><span>${esc(a.name)}</span></div>`;
     const r = await sc.listStories(a.id);
-    if (!r.ok) { rows.push(`<div class="tot"><b class="msg-err">!</b><span>${esc(a.name)}: ${esc(r.error)}</span></div>`); continue; }
+    if (!r.ok) { rows.push(`<div class="tot acc" data-acc="${esc(a.id)}">${avatarHtml(a)}<div><b class="msg-err">!</b><span>${esc(a.name)}: ${esc(r.error)}</span></div></div>`); continue; }
     const act = r.stories.filter((s) => s.active);
     const v = act.reduce((n, s) => n + s.views, 0), x = act.reduce((n, s) => n + s.reactionsCount, 0);
     views += v; reacts += x; live += act.length;
-    rows.push(`<div class="tot"><b>👁 ${v} · ❤ ${x}</b><span>${esc(a.name)} (${act.length} live)</span></div>`);
+    rows.push(`<div class="tot acc" data-acc="${esc(a.id)}">${avatarHtml(a)}<div><b>👁 ${v} · ❤ ${x}</b><span>${esc(a.name)} (${act.length} live)</span></div></div>`);
     await new Promise((res) => setTimeout(res, 800));
   }
   box.innerHTML = totalsCard() + rows.join("");
@@ -359,12 +397,14 @@ async function loadViewers(reset) {
   if (!r.ok) return say($("#vMsg"), r.error, "err");
   st.list.push(...r.viewers);
   st.next = r.next;
-  $("#vList").innerHTML = st.list.length ? st.list.map((v) => `<div class="vrow">
-      <div class="avatar" style="background:${color(v.id)}">${esc(initials(v.name))}</div>
+  vPhotoQueue = []; // forget photos waiting for an older list
+  $("#vList").innerHTML = st.list.length ? st.list.map((v) => `<div class="vrow" data-vid="${esc(v.id)}">
+      ${viewerAvatar(v)}
       <div class="who"><b>${esc(v.name)}</b><span>${v.username ? "@" + esc(v.username) + " · " : ""}${ago(v.date)}</span></div>
       <span class="r">${esc(v.reaction)}</span></div>`).join("")
     : `<div class="empty">${$("#vSearch").value ? "No viewer with that name." : "No viewers yet."}</div>`;
   $("#vMore").classList.toggle("hidden", !r.next);
+  queueViewerPhotos(st.id, st.list);
   say($("#vMsg"), `${st.list.length} of ${r.count} viewers shown`);
 }
 $("#vMore").onclick = () => loadViewers(false);
