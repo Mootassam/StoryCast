@@ -43,9 +43,27 @@ async function loadAccounts() {
   renderPostAccounts();
   renderAccTable();
   fillStatsAccounts();
+  loadPhotos(false);
+}
+const photos = {}; // account id -> data URL
+let photoQueue = Promise.resolve();
+function avatarHtml(a) {
+  return photos[a.id]
+    ? `<img class="avatar" src="${photos[a.id]}" alt="" />`
+    : `<div class="avatar" style="background:${color(a.id)}">${esc(initials(a.name))}</div>`;
+}
+// load photos one by one (saved copy first, so it is instant after the first time)
+function loadPhotos(fresh, ids) {
+  for (const a of accounts.filter((x) => !ids || ids.includes(x.id))) {
+    if (!fresh && a.id in photos) continue;
+    photoQueue = photoQueue.then(async () => {
+      const r = await sc.accountPhoto({ id: a.id, fresh });
+      if (r.ok) { photos[a.id] = r.photo; $(`[data-id="${CSS.escape(a.id)}"] .avatar`).forEach((el) => (el.outerHTML = avatarHtml(a))); }
+    });
+  }
 }
 function accLine(a) {
-  return `<div class="avatar" style="background:${color(a.id)}">${esc(initials(a.name))}</div>
+  return `${avatarHtml(a)}
     <div class="who"><b>${esc(a.name)} ${a.premium ? '<span class="star">★ Premium</span>' : ""}</b>
     <span>${esc(a.phone)}${a.username ? " · @" + esc(a.username) : ""}${a.status === "loggedout" ? ' · <span class="msg-err">logged out</span>' : a.status === "limit" ? ' · <span style="color:var(--warn)">limit reached</span>' : ""}</span></div>`;
 }
@@ -78,6 +96,7 @@ function renderAccTable() {
       note.textContent = "Checking…"; note.className = "state";
       const r = await sc.checkAccount(id);
       await loadAccounts();
+      if (r.ok) loadPhotos(true, [id]);
       const n = document.querySelector(`#accTable .accrow[data-id="${CSS.escape(id)}"] [data-note]`);
       if (n) { n.textContent = !r.ok ? r.error : r.canPost ? "Ready to post ✓" : r.note; n.className = "state " + (r.ok && r.canPost ? "done" : "error"); }
     } else {
@@ -137,6 +156,7 @@ async function loggedIn(acc) {
   $("#modal").classList.add("hidden");
   selected.add(acc.id);
   await loadAccounts();
+  loadPhotos(true, [acc.id]);
 }
 $("#signIn").onclick = () => busy($("#signIn"), async () => {
   const r = await sc.signIn({ phone: loginPhone, code: $("#code").value });

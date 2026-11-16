@@ -104,3 +104,4 @@ select.inline { width: auto; min-width: 200px; margin: 0; }
 .vrow .r { font-size: 20px; margin-left: auto; }
 .nowrap { white-space: nowrap; margin: 0; }
 .gap input { margin: 0; }
+img.avatar { object-fit: cover; background: var(--card2); }

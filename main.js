@@ -187,6 +187,7 @@ ipcMain.handle("acc:remove", async (_e, { id, logout }) => {
     try { const c = await clientFor(acc); await c.invoke(new Api.auth.LogOut()); } catch {}
   }
   await dropClient(id);
+  try { fs.unlinkSync(avatarFile(id)); } catch {}
   saveAccounts(accounts.filter((a) => a.id !== id));
   return ok();
 });
@@ -316,6 +317,35 @@ ipcMain.handle("post:start", async (_e, job) => {
   return ok({ done: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length });
 });
 ipcMain.handle("post:cancel", () => { cancelRun = true; return ok(); });
+
+// ---------- profile photos of connected accounts ----------
+const avatarFile = (id) => path.join(dataDir(), "avatars", String(id).replace(/\D/g, "") + ".jpg");
+const toDataUrl = (buf) => "data:image/jpeg;base64," + buf.toString("base64");
+
+async function downloadAvatar(acc) {
+  const c = await clientFor(acc);
+  const me = await c.getMe();
+  const f = avatarFile(acc.id);
+  if (!me.photo || me.photo instanceof Api.UserProfilePhotoEmpty) {
+    try { fs.unlinkSync(f); } catch {}
+    return "";
+  }
+  const buf = await c.downloadProfilePhoto(me, { isBig: false });
+  if (!buf || !buf.length) return "";
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, buf);
+  return toDataUrl(Buffer.from(buf));
+}
+
+// fresh=false: use the saved copy if we have one (fast, no Telegram request)
+ipcMain.handle("acc:photo", async (_e, { id, fresh }) => {
+  const acc = getAccounts().find((a) => a.id === id);
+  if (!acc) return ok({ photo: "" });
+  const f = avatarFile(id);
+  if (!fresh && fs.existsSync(f)) return ok({ photo: toDataUrl(fs.readFileSync(f)) });
+  try { return ok({ photo: await downloadAvatar(acc) }); }
+  catch (e) { return fs.existsSync(f) ? ok({ photo: toDataUrl(fs.readFileSync(f)) }) : fail(e); }
+});
 
 // ---------- my stories: views + reactions ----------
 const { strippedPhotoToJpg } = require("telegram/Utils");

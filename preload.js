@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("sc", {
   listAccounts: call("acc:list"),
   removeAccount: call("acc:remove"),
   checkAccount: call("acc:check"),
+  accountPhoto: call("acc:photo"),
   pickMedia: call("media:pick"),
   mediaInfo: call("media:info"),
   pathOf: (f) => webUtils.getPathForFile(f),
