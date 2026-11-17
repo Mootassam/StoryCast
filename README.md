@@ -16,3 +16,15 @@ Double-click `Start.bat` (or `npm start`).
 - Free accounts: a few Stories per day, 24h only. Premium: more Stories, 6/12/48h.
 - Scheduled posts need the app to stay open.
 - Uses GramJS (`telegram` npm 2.26.x, archived; `teleproto` is the maintained fork if updates are needed).
+
+## Build the Windows installer
+```
+npm install
+npm run dist        # -> installer_output\StoryCast-Setup-<version>.exe (needs Inno Setup 6)
+```
+The installer is unsigned, so Windows Smart App Control may block it on a new PC.
+To install on this PC anyway (uses only the official, trusted electron.exe):
+```
+node_modules\electron\dist\electron.exe tools\install-local.js
+```
+Icon: `npm run icon` redraws `assets/icon.png` + `assets/icon.ico`.
