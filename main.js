@@ -1,7 +1,19 @@
 // StoryCast — post one Telegram Story to many of YOUR accounts.
 // Sessions are stored only on this computer, encrypted with Windows safeStorage.
+if (process.argv.includes("--uninstall")) { require("./uninstall"); return; } // Windows "Uninstall" runs this
+
 const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require("electron");
 const path = require("path");
+
+// Same id as the Start menu / desktop shortcuts: Windows then shows the StoryCast icon in the taskbar
+// and groups the window with a pinned StoryCast icon.
+const APP_ID = "com.storycast.app";
+app.setAppUserModelId(APP_ID);
+const ICON = path.join(__dirname, "assets", "icon.png");
+
+// Only one StoryCast at a time (two copies would use the same Telegram logins at once).
+if (!app.requestSingleInstanceLock()) { app.quit(); return; }
+app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
 const fs = require("fs");
 const { TelegramClient, Api, helpers } = require("telegram");
 const { StringSession } = require("telegram/sessions");
@@ -515,8 +527,9 @@ function createWindow() {
     height: 760,
     minWidth: 760,
     minHeight: 560,
-    backgroundColor: "#0b1020",
+    backgroundColor: "#070b18",
     title: "StoryCast",
+    icon: ICON,
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });

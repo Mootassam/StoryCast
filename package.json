@@ -1,9 +1,11 @@
 {
   "name": "storycast",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "powershell -ExecutionPolicy Bypass -File build.ps1",
+    "icon": "node tools/make-icon.js"
   },
   "license": "UNLICENSED",
   "description": "Post one Telegram Story to many of your own accounts",
