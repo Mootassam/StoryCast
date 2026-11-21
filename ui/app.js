@@ -329,60 +329,201 @@ function pumpViewerPhotos() {
     }).catch(() => {}).finally(() => { vPhotoBusy--; pumpViewerPhotos(); });
   }
 }
-async function loadStories() {
-  const id = $("#statsAcc").value;
-  $("#storyList").innerHTML = "";
-  if (!id) return say($("#statsMsg"), "Add an account first.");
-  say($("#statsMsg"), "Loading stories…");
-  const r = await sc.listStories(id);
-  if ($("#statsAcc").value !== id) return;
-  if (!r.ok) return say($("#statsMsg"), r.error, "err");
-  storiesCache = r.stories;
-  if (!r.stories.length) return say($("#statsMsg"), "No stories on this account yet.");
-  const live = r.stories.filter((s) => s.active).length;
-  say($("#statsMsg"), `${r.stories.length} stories (${live} live now). Click one to see who viewed and reacted.`);
-  $("#storyList").innerHTML = r.stories.map((s) => `<button class="story" data-sid="${s.id}">
+/* run fn over items, at most n at the same time */
+async function pool(items, n, fn) {
+  let i = 0;
+  const worker = async () => { while (i < items.length) { const k = i++; await fn(items[k], k); } };
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker));
+}
+function countTo(el, to) {
+  const t0 = performance.now(), dur = 650;
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / dur);
+    el.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))).toLocaleString();
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function storyCard(s) {
+  return `<button class="story" data-sid="${s.id}">
       <div class="th" style="${s.thumb ? `background-image:url('${s.thumb}')` : ""}">${s.kind === "video" ? "▶" : ""}</div>
+      <span class="del-btn" data-del="${s.id}" title="Delete this story">🗑</span>
       <div class="info">
         <span class="badge ${s.active ? "live" : "old"}">${s.active ? "● Live" : "Ended"}</span>
         <span class="muted small">${when(s.date)}</span>
         <div class="nums"><span title="Views">👁 ${s.views}</span><span title="Reactions">❤ ${s.reactionsCount}</span></div>
         <div class="rx">${s.reactions.slice(0, 5).map((x) => `${esc(x.emoji)} ${x.count}`).join(" · ")}</div>
         ${s.caption ? `<div class="cap">${esc(s.caption)}</div>` : ""}
-      </div></button>`).join("");
-  $$("#storyList .story").forEach((b) => (b.onclick = () => openViewers(Number(b.dataset.sid))));
-  // swap the blurry preview for a sharp thumbnail, one story at a time
-  for (const s of r.stories) {
+      </div></button>`;
+}
+function storyMsg() {
+  const n = storiesCache.length, live = storiesCache.filter((s) => s.active).length;
+  if (!n) return say($("#statsMsg"), "No stories on this account yet.");
+  say($("#statsMsg"), `${n} ${n === 1 ? "story" : "stories"} (${live} live now). Click one to see who viewed and reacted.`);
+}
+
+async function loadStories() {
+  const id = $("#statsAcc").value;
+  if (!id) { $("#storyList").innerHTML = ""; return say($("#statsMsg"), "Add an account first."); }
+  say($("#statsMsg"), "");
+  // placeholders in the shape of story cards while Telegram answers
+  $("#storyList").innerHTML = Array.from({ length: 4 }, () => `<div class="story skeleton"><div class="th skel"></div></div>`).join("");
+  const r = await sc.listStories(id);
+  if ($("#statsAcc").value !== id) return;
+  if (!r.ok) { $("#storyList").innerHTML = ""; return say($("#statsMsg"), r.error, "err"); }
+  storiesCache = r.stories;
+  $("#storyList").innerHTML = r.stories.map(storyCard).join("");
+  storyMsg();
+  $$("#storyList .story").forEach((b) => (b.onclick = (e) => {
+    const d = e.target.closest("[data-del]");
+    if (d) { e.stopPropagation(); return askDelete(Number(d.dataset.del)); }
+    openViewers(Number(b.dataset.sid));
+  }));
+  // sharp thumbnails, 3 at a time (the blurry preview turns sharp)
+  await pool(r.stories, 3, async (s) => {
     const t = await sc.storyThumb({ id, storyId: s.id }).catch(() => null);
     if ($("#statsAcc").value !== id) return;
-    const el = document.querySelector(`#storyList .story[data-sid="${s.id}"] .th`);
     if (t?.ok && t.photo) storyThumbs[id + ":" + s.id] = t.photo;
+    const el = document.querySelector(`#storyList .story[data-sid="${s.id}"] .th`);
     if (t?.ok && t.photo && el) { el.style.backgroundImage = `url('${t.photo}')`; el.classList.add("sharp"); }
-  }
+  });
 }
 $("#statsAcc").onchange = () => { $("#statsTotals").classList.add("hidden"); loadStories(); };
 $("#statsRefresh").onclick = loadStories;
 
-// Totals: live stories on every account, one account at a time (gentle on Telegram)
+// Totals for all accounts: everything loads in the background (3 accounts at a time),
+// a clean placeholder shows meanwhile, then all the numbers appear together.
+let totalsRun = 0;
 $("#statsAll").onclick = async () => {
-  const box = $("#statsTotals");
+  const run = ++totalsRun;
+  const box = $("#statsTotals"), btn = $("#statsAll");
   box.classList.remove("hidden");
-  box.innerHTML = "";
+  btn.disabled = true;
+  const skelTot = `<div class="tot loading"><div class="skel big"></div><div class="skel line"></div></div>`;
+  const skelAcc = `<div class="tot acc loading"><div class="skel av"></div><div><div class="skel big"></div><div class="skel line"></div></div></div>`;
+  box.innerHTML = skelTot.repeat(3) + `<div class="tot-progress"><span id="totStep">Loading ${accounts.length} accounts…</span><div class="bar"><span id="totBar"></span></div></div>` + skelAcc.repeat(accounts.length);
+  const results = new Array(accounts.length);
+  let done = 0;
+  await pool(accounts, 3, async (a, k) => {
+    results[k] = await sc.listStories(a.id).catch((e) => ({ ok: false, error: String(e) }));
+    done++;
+    if (run !== totalsRun) return;
+    const bar = $("#totBar"), step = $("#totStep");
+    if (bar) bar.style.width = Math.round((done / accounts.length) * 100) + "%";
+    if (step) step.textContent = `Loading accounts… ${done} of ${accounts.length}`;
+  });
+  if (run !== totalsRun) return;
+  await new Promise((res) => setTimeout(res, 250)); // let the bar reach the end
   let views = 0, reacts = 0, live = 0;
-  const totalsCard = () => `<div class="tot"><b>👁 ${views}</b><span>Total views (live stories)</span></div><div class="tot"><b>❤ ${reacts}</b><span>Total reactions</span></div><div class="tot"><b>${live}</b><span>Live stories</span></div>`;
-  const rows = [];
-  for (const a of accounts) {
-    box.innerHTML = totalsCard() + rows.join("") + `<div class="tot"><b>…</b><span>${esc(a.name)}</span></div>`;
-    const r = await sc.listStories(a.id);
-    if (!r.ok) { rows.push(`<div class="tot acc" data-acc="${esc(a.id)}">${avatarHtml(a)}<div><b class="msg-err">!</b><span>${esc(a.name)}: ${esc(r.error)}</span></div></div>`); continue; }
+  const rows = accounts.map((a, k) => {
+    const r = results[k];
+    if (!r || !r.ok) return `<div class="tot acc reveal" data-acc="${esc(a.id)}">${avatarHtml(a)}<div><b class="msg-err">Couldn't load</b><span>${esc(a.name)}: ${esc((r && r.error) || "error")}</span></div></div>`;
     const act = r.stories.filter((s) => s.active);
     const v = act.reduce((n, s) => n + s.views, 0), x = act.reduce((n, s) => n + s.reactionsCount, 0);
     views += v; reacts += x; live += act.length;
-    rows.push(`<div class="tot acc" data-acc="${esc(a.id)}">${avatarHtml(a)}<div><b>👁 ${v} · ❤ ${x}</b><span>${esc(a.name)} (${act.length} live)</span></div></div>`);
-    await new Promise((res) => setTimeout(res, 800));
-  }
-  box.innerHTML = totalsCard() + rows.join("");
+    return { a, v, x, n: act.length };
+  });
+  const accHtml = rows.map((r, i) => typeof r === "string" ? r
+    : `<div class="tot acc reveal" style="animation-delay:${120 + i * 50}ms" data-acc="${esc(r.a.id)}" title="Open ${esc(r.a.name)}">${avatarHtml(r.a)}<div><b>👁 ${r.v.toLocaleString()} · ❤ ${r.x.toLocaleString()}</b><span>${esc(r.a.name)} · ${r.n} live</span></div></div>`).join("");
+  box.innerHTML = `<div class="tot reveal"><b id="totV">0</b><span>👁 Total views (live stories)</span></div>`
+    + `<div class="tot reveal" style="animation-delay:50ms"><b id="totR">0</b><span>❤ Total reactions</span></div>`
+    + `<div class="tot reveal" style="animation-delay:100ms"><b id="totL">0</b><span>Live stories</span></div>` + accHtml;
+  countTo($("#totV"), views); countTo($("#totR"), reacts); countTo($("#totL"), live);
+  $$("#statsTotals .tot.acc").forEach((el) => (el.onclick = () => {
+    $("#statsAcc").value = el.dataset.acc;
+    renderStatsChips();
+    loadStories();
+  }));
+  btn.disabled = false;
 };
+
+// ---------- delete a story (and, optionally, the same story on the other accounts) ----------
+let delState = null;
+/* the "same story" on another account = posted within 10 minutes, same caption, same kind (StoryCast posts them together) */
+const sameStory = (a, b) => Math.abs(a.date - b.date) <= 600 && (a.caption || "") === (b.caption || "") && a.kind === b.kind;
+
+function askDelete(storyId) {
+  const accId = $("#statsAcc").value;
+  const s = storiesCache.find((x) => x.id === storyId);
+  if (!s) return;
+  const acc = accounts.find((a) => a.id === accId) || { name: "" };
+  const run = {};
+  delState = { accId, story: s, others: [], run };
+  const thumb = storyThumbs[accId + ":" + storyId] || s.thumb;
+  $("#dThumb").style.backgroundImage = thumb ? `url('${thumb}')` : "";
+  $("#dInfo").textContent = `${acc.name} · ${s.active ? "live now" : "ended"} · posted ${when(s.date)} · 👁 ${s.views}`;
+  $("#dAllRow").classList.add("hidden");
+  $("#dAll").checked = true;
+  $("#dProgress").classList.add("hidden");
+  $("#dProgress span").style.width = "0";
+  say($("#dMsg"), "");
+  $("#dGo").disabled = false; $("#dCancel").disabled = false;
+  $("#dGo").textContent = "Delete";
+  $("#dModal").classList.remove("hidden");
+  // look for the same story on the other accounts
+  const others = accounts.filter((a) => a.id !== accId);
+  if (!others.length) { $("#dFinding").textContent = ""; return; }
+  $("#dFinding").textContent = "Checking your other accounts for the same story…";
+  const found = [];
+  pool(others, 3, async (a) => {
+    const r = await sc.listStories(a.id).catch(() => null);
+    if (r && r.ok) for (const x of r.stories) if (sameStory(x, s)) found.push({ acc: a, story: x });
+  }).then(() => {
+    if (delState?.run !== run) return;
+    found.sort((x, y) => accounts.indexOf(x.acc) - accounts.indexOf(y.acc));
+    delState.others = found;
+    $("#dFinding").textContent = found.length ? "" : "This story is only on this account.";
+    if (found.length) {
+      const names = [...new Set(found.map((f) => f.acc.name))];
+      $("#dAllText").textContent = `Also delete it from my other ${names.length === 1 ? "account" : names.length + " accounts"} (${names.slice(0, 4).join(", ")}${names.length > 4 ? "…" : ""})`;
+      $("#dAllRow").classList.remove("hidden");
+    }
+  });
+}
+function closeDelete() { if ($("#dGo").disabled && delState?.busy) return; delState = null; $("#dModal").classList.add("hidden"); }
+$("#dCancel").onclick = closeDelete;
+$("#dModal").addEventListener("click", (e) => { if (e.target.id === "dModal") closeDelete(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && delState && !$("#dModal").classList.contains("hidden")) closeDelete(); });
+
+$("#dGo").onclick = async () => {
+  const st = delState;
+  if (!st) return;
+  st.busy = true;
+  $("#dGo").disabled = true; $("#dCancel").disabled = true;
+  $("#dGo").textContent = "Deleting…";
+  const jobs = [{ acc: accounts.find((a) => a.id === st.accId) || { id: st.accId, name: "" }, story: st.story }];
+  if (!$("#dAllRow").classList.contains("hidden") && $("#dAll").checked) jobs.push(...st.others);
+  // group by account: one request per account
+  const byAcc = new Map();
+  for (const j of jobs) { if (!byAcc.has(j.acc.id)) byAcc.set(j.acc.id, { acc: j.acc, ids: [] }); byAcc.get(j.acc.id).ids.push(j.story.id); }
+  const groups = [...byAcc.values()];
+  $("#dProgress").classList.remove("hidden");
+  let done = 0; const errors = [], failed = new Set();
+  for (const g of groups) {
+    const r = await sc.deleteStories({ id: g.acc.id, storyIds: g.ids }).catch((e) => ({ ok: false, error: String(e) }));
+    if (!r.ok) { errors.push(`${g.acc.name}: ${r.error}`); failed.add(g.acc.id); }
+    done++;
+    $("#dProgress span").style.width = Math.round((done / groups.length) * 100) + "%";
+  }
+  st.busy = false;
+  const mainOk = !failed.has(st.accId);
+  // the open account: take the card away
+  if (mainOk) {
+    storiesCache = storiesCache.filter((x) => x.id !== st.story.id);
+    const card = document.querySelector(`#storyList .story[data-sid="${st.story.id}"]`);
+    if (card) { card.classList.add("removing"); setTimeout(() => { card.remove(); storyMsg(); }, 340); } else storyMsg();
+    if (vState && vState.storyId === st.story.id) closeViewer();
+    $("#statsTotals").classList.add("hidden"); // numbers changed: totals need a fresh load
+  }
+  if (errors.length) {
+    $("#dGo").textContent = "Delete"; $("#dGo").disabled = false; $("#dCancel").disabled = false;
+    return say($("#dMsg"), `Not deleted on ${errors.length === 1 ? "1 account" : errors.length + " accounts"}: ${errors.join(" · ")}`, "err");
+  }
+  say($("#dMsg"), groups.length > 1 ? `✓ Deleted from ${groups.length} accounts.` : "✓ Story deleted.", "ok");
+  setTimeout(closeDelete, 900);
+};
+$("#svDelete").onclick = () => { if (vState) askDelete(vState.storyId); };
 
 // viewers modal
 let vState = null;
@@ -453,7 +594,7 @@ function closeViewer() {
   $("#svMedia").innerHTML = ""; // stops the video
 }
 $("#vModal").addEventListener("click", (e) => { if (e.target.id === "vModal") closeViewer(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && vState) closeViewer(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && vState && $("#dModal").classList.contains("hidden")) closeViewer(); });
 async function loadViewers(reset) {
   if (!vState) return;
   if (reset) { vState.next = ""; vState.list = []; $("#vList").innerHTML = ""; }

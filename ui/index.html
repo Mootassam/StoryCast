@@ -127,6 +127,7 @@
           <div class="sv-head">
             <span id="svBadge" class="badge"></span>
             <span id="svWhen" class="muted small"></span>
+            <button id="svDelete" class="danger-ghost" title="Delete this story">🗑 Delete</button>
           </div>
           <p id="svCaption" class="sv-caption"></p>
 
@@ -182,6 +183,28 @@
       </div>
     </section>
   </main>
+
+  <!-- DELETE STORY -->
+  <div id="dModal" class="modal hidden">
+    <div class="sheet del">
+      <div class="del-top">
+        <div id="dThumb" class="del-thumb"></div>
+        <div>
+          <h2>Delete this story?</h2>
+          <p class="muted small" id="dInfo"></p>
+        </div>
+      </div>
+      <p class="del-warn">It will be removed from Telegram for everyone, with its views and reactions. This can't be undone.</p>
+      <label class="del-all hidden" id="dAllRow"><input type="checkbox" id="dAll" checked /> <span id="dAllText"></span></label>
+      <p id="dFinding" class="small muted"></p>
+      <div id="dProgress" class="del-progress hidden"><span></span></div>
+      <p id="dMsg" class="small"></p>
+      <div class="del-btns">
+        <button id="dCancel" class="ghost">Cancel</button>
+        <button id="dGo" class="danger">Delete</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ADD ACCOUNT MODAL -->
   <div id="modal" class="modal hidden">

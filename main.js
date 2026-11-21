@@ -501,6 +501,29 @@ ipcMain.handle("stories:full", async (_e, { id, storyId }) => {
   } catch (e) { logError("full", id, e); return fail(e); }
 });
 
+// ---------- delete stories (live or old) ----------
+ipcMain.handle("stories:delete", async (_e, { id, storyIds }) => {
+  const acc = getAccounts().find((a) => a.id === id);
+  if (!acc) return fail("Account not found.");
+  const ids = [...new Set((storyIds || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  if (!ids.length) return ok({ deleted: [] });
+  try {
+    const c = await clientFor(acc);
+    const res = await c.invoke(new Api.stories.DeleteStories({ peer: new Api.InputPeerSelf(), id: ids }));
+    const deleted = (Array.isArray(res) ? res : []).map(Number);
+    // Telegram answers with the ids it removed; an id it no longer knows is already gone
+    const gone = deleted.length ? deleted : ids;
+    const safe = String(id).replace(/[^0-9]/g, "");
+    for (const sid of ids) {
+      storyMedia.delete(id + ":" + sid);
+      for (const f of [path.join(dataDir(), "thumbs", `${safe}_${sid}.jpg`), path.join(dataDir(), "stories", `${safe}_${sid}.jpg`), path.join(dataDir(), "stories", `${safe}_${sid}.mp4`)]) {
+        try { fs.unlinkSync(f); } catch {}
+      }
+    }
+    return ok({ deleted: gone });
+  } catch (e) { logError("delete", id, e); return fail(e); }
+});
+
 // ---------- viewer profile photos ----------
 const viewerUsers = new Map(); // "accountId:userId" -> User (needed to download the photo)
 ipcMain.handle("stories:viewerPhoto", async (_e, { id, userId }) => {

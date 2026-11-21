@@ -214,3 +214,46 @@ img.avatar { object-fit: cover; background: var(--card3); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #2a3658; border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: #3a4a75; }
+
+/* ---------- loading skeletons ---------- */
+@keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+.skel { background: linear-gradient(90deg, var(--card2) 25%, var(--card3) 40%, var(--card2) 60%); background-size: 400% 100%; animation: shimmer 1.3s ease-in-out infinite; border-radius: 10px; }
+.tot.loading { background: var(--card2) !important; border-color: var(--line) !important; }
+.tot.loading .skel.big { height: 30px; width: 60%; margin-bottom: 8px; }
+.tot.loading .skel.line { height: 11px; width: 80%; }
+.tot.acc.loading .skel.av { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+.tot.acc.loading > div:last-child { flex: 1; }
+.tot.acc.loading .skel.big { height: 16px; width: 70%; margin-bottom: 8px; }
+.tot-progress { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.tot-progress .bar { flex: 1; height: 4px; border-radius: 4px; background: var(--card2); overflow: hidden; }
+.tot-progress .bar span { display: block; height: 100%; width: 0; background: var(--grad); transition: width .35s ease; }
+.totals .reveal { animation: fadeUp .35s ease-out both; }
+.tot.acc { cursor: pointer; transition: .15s; border: 1px solid transparent; }
+.tot.acc:hover { border-color: var(--brand); }
+.story.skeleton { pointer-events: none; }
+.story.skeleton .th { filter: none; }
+.story.skeleton::after { display: none; }
+
+/* ---------- delete ---------- */
+.danger { background: linear-gradient(135deg, #ef4444, #db2777); color: #fff; border: 0; border-radius: 14px; padding: 11px 22px; font-weight: 800; box-shadow: 0 10px 26px rgba(239, 68, 68, .3); transition: .15s; }
+.danger:hover { transform: translateY(-1px); box-shadow: 0 14px 30px rgba(239, 68, 68, .4); }
+.danger:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+.danger-ghost { margin-left: auto; background: rgba(239, 68, 68, .08); color: #fca5a5; border: 1px solid rgba(239, 68, 68, .35); border-radius: 12px; padding: 6px 12px; font-weight: 700; font-size: 12.5px; transition: .15s; }
+.danger-ghost:hover { background: rgba(239, 68, 68, .18); color: #fff; }
+.story .del-btn { position: absolute; top: 10px; right: 10px; z-index: 2; width: 36px; height: 36px; border-radius: 50%; border: 0; display: grid; place-items: center;
+  background: rgba(0, 0, 0, .55); color: #fff; font-size: 16px; opacity: 0; transform: scale(.85); transition: .15s; backdrop-filter: blur(6px); }
+.story:hover .del-btn { opacity: 1; transform: none; }
+.story .del-btn:hover { background: #ef4444; }
+.story.removing { animation: storyOut .35s ease-in forwards; }
+@keyframes storyOut { to { opacity: 0; transform: scale(.85); } }
+.sheet.del { width: min(480px, 92vw); }
+.del-top { display: flex; gap: 16px; align-items: center; }
+.del-top h2 { margin: 0 0 4px; }
+.del-thumb { width: 64px; height: 106px; border-radius: 12px; background: #111 center/cover; flex: none; box-shadow: 0 8px 20px rgba(0, 0, 0, .4); }
+.del-warn { margin: 16px 0 12px; padding: 12px 14px; border-radius: 14px; background: rgba(239, 68, 68, .08); border: 1px solid rgba(239, 68, 68, .25); color: #fecaca; font-size: 13px; }
+.del-all { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--card2); font-weight: 600; cursor: pointer; }
+.del-all input { width: 18px; height: 18px; margin: 0; accent-color: #ef4444; }
+.del-progress { height: 5px; border-radius: 5px; background: var(--card2); overflow: hidden; margin-top: 10px; }
+.del-progress span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ef4444, #db2777); transition: width .3s; }
+.del-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+.ghost:disabled { opacity: .45; cursor: not-allowed; }
